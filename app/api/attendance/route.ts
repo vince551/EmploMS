@@ -1,0 +1,5 @@
+import { NextResponse } from 'next/server'
+import { getSession } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+export async function GET(){ const s=await getSession(); if(!s)return NextResponse.json({error:'Unauthorized'},{status:401}); const rows=await prisma.attendance.findMany({include:{employee:true},orderBy:{date:'desc'},take:100}); return NextResponse.json(rows)}
+export async function POST(req:Request){ const s=await getSession(); if(!s?.employeeId)return NextResponse.json({error:'Employee account required'},{status:403}); const today=new Date(); today.setHours(0,0,0,0); const existing=await prisma.attendance.findUnique({where:{employeeId_date:{employeeId:s.employeeId,date:today}}}); if(existing?.checkIn)return NextResponse.json({error:'Already checked in'},{status:409}); const row=await prisma.attendance.upsert({where:{employeeId_date:{employeeId:s.employeeId,date:today}},update:{checkIn:new Date(),status:'PRESENT'},create:{employeeId:s.employeeId,date:today,checkIn:new Date(),status:'PRESENT'}}); return NextResponse.json(row)}
