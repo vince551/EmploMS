@@ -1,0 +1,132 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db { provider = "postgresql" url = env("DATABASE_URL") }
+
+enum Role { ADMIN HR EMPLOYEE }
+enum EmploymentStatus { ACTIVE ON_LEAVE INACTIVE }
+enum AttendanceStatus { PRESENT LATE ABSENT HALF_DAY }
+enum LeaveType { CASUAL SICK PAID UNPAID }
+enum LeaveStatus { PENDING APPROVED REJECTED CANCELLED }
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String
+  role         Role     @default(EMPLOYEE)
+  employee     Employee?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+model Department {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  managerName String?
+  budget      Decimal    @db.Decimal(14,2) @default(0)
+  employees   Employee[]
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+}
+
+model Employee {
+  id           String           @id @default(cuid())
+  employeeId   String           @unique
+  name         String
+  email        String           @unique
+  phone        String?
+  designation  String
+  salary       Decimal          @db.Decimal(14,2)
+  joinedAt     DateTime
+  status       EmploymentStatus @default(ACTIVE)
+  departmentId String
+  department   Department       @relation(fields: [departmentId], references: [id])
+  userId       String?          @unique
+  user         User?            @relation(fields: [userId], references: [id])
+  attendance   Attendance[]
+  leaves       LeaveRequest[]
+  payroll      Payroll[]
+  reviews      PerformanceReview[]
+  goals        Goal[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+}
+
+model Attendance {
+  id         String           @id @default(cuid())
+  employeeId String
+  employee   Employee         @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  date       DateTime
+  checkIn    DateTime?
+  checkOut   DateTime?
+  hours      Float            @default(0)
+  overtime   Float            @default(0)
+  status     AttendanceStatus @default(PRESENT)
+  note       String?
+  @@unique([employeeId, date])
+  @@index([date])
+}
+
+model LeaveRequest {
+  id         String      @id @default(cuid())
+  employeeId String
+  employee   Employee    @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  type       LeaveType
+  startDate  DateTime
+  endDate    DateTime
+  days       Float
+  reason     String
+  status     LeaveStatus @default(PENDING)
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime    @default(now())
+  @@index([status])
+}
+
+model Payroll {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee    Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  month       String
+  basic       Decimal  @db.Decimal(14,2)
+  allowances  Decimal  @db.Decimal(14,2) @default(0)
+  bonus       Decimal  @db.Decimal(14,2) @default(0)
+  deductions  Decimal  @db.Decimal(14,2) @default(0)
+  tax         Decimal  @db.Decimal(14,2) @default(0)
+  net         Decimal  @db.Decimal(14,2)
+  processedAt DateTime @default(now())
+  @@unique([employeeId, month])
+}
+
+model PerformanceReview {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  period     String
+  rating     Float
+  feedback   String
+  reviewer   String
+  createdAt  DateTime @default(now())
+}
+
+model Goal {
+  id          String   @id @default(cuid())
+  employeeId  String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  progress    Int      @default(0)
+  dueDate     DateTime?
+  createdAt   DateTime @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  createdAt DateTime @default(now())
+  @@index([createdAt])
+}
