@@ -1,0 +1,7 @@
+import { NextResponse } from 'next/server'
+import { getSession, requireRole } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+const schema=z.object({employeeId:z.string(),month:z.string(),allowances:z.coerce.number().default(0),bonus:z.coerce.number().default(0),deductions:z.coerce.number().default(0),tax:z.coerce.number().default(0)})
+export async function GET(){const s=await getSession();if(!s)return NextResponse.json({error:'Unauthorized'},{status:401});const where=s.role==='EMPLOYEE'?{employeeId:s.employeeId}:{};const rows=await prisma.payroll.findMany({where,include:{employee:true},orderBy:{processedAt:'desc'}});return NextResponse.json(rows)}
+export async function POST(req:Request){try{await requireRole(['ADMIN','HR']);const d=schema.parse(await req.json());const e=await prisma.employee.findUnique({where:{id:d.employeeId}});if(!e)return NextResponse.json({error:'Employee not found'},{status:404});const basic=Number(e.salary),net=basic+d.allowances+d.bonus-d.deductions-d.tax;const row=await prisma.payroll.upsert({where:{employeeId_month:{employeeId:d.employeeId,month:d.month}},update:{basic,allowances:d.allowances,bonus:d.bonus,deductions:d.deductions,tax:d.tax,net},create:{employeeId:d.employeeId,month:d.month,basic,allowances:d.allowances,bonus:d.bonus,deductions:d.deductions,tax:d.tax,net}});return NextResponse.json(row)}catch(e:any){return NextResponse.json({error:e.message},{status:e.message==='FORBIDDEN'?403:400})}}
