@@ -1,0 +1,5 @@
+import {NextResponse} from 'next/server'
+import {getSession,requireRole} from '@/lib/auth'
+import {prisma} from '@/lib/prisma'
+export async function GET(){const s=await getSession();if(!s)return NextResponse.json({error:'Unauthorized'},{status:401});return NextResponse.json(await prisma.department.findMany({include:{_count:{select:{employees:true}}},orderBy:{name:'asc'}}))}
+export async function POST(req:Request){try{const s=await requireRole(['ADMIN']);const {name,managerName,budget}=await req.json();if(!name)return NextResponse.json({error:'Department name is required'},{status:400});const row=await prisma.department.create({data:{name,managerName,budget:Number(budget||0)}});await prisma.auditLog.create({data:{actorId:s.id,action:'CREATE',entity:'Department',entityId:row.id}});return NextResponse.json(row,{status:201})}catch(e:any){return NextResponse.json({error:e.message},{status:e.message==='FORBIDDEN'?403:400})}}
