@@ -1,0 +1,8 @@
+import { NextResponse } from 'next/server'
+import { getSession, requireRole } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+const schema=z.object({employeeId:z.string(),type:z.enum(['CASUAL','SICK','PAID','UNPAID']),startDate:z.coerce.date(),endDate:z.coerce.date(),reason:z.string().min(3)})
+export async function GET(){const s=await getSession();if(!s)return NextResponse.json({error:'Unauthorized'},{status:401});const where=s.role==='EMPLOYEE'?{employeeId:s.employeeId}:{};return NextResponse.json(await prisma.leaveRequest.findMany({where,include:{employee:true},orderBy:{createdAt:'desc'}}))}
+export async function POST(req:Request){try{const s=await getSession();if(!s)return NextResponse.json({error:'Unauthorized'},{status:401});const raw=schema.parse(await req.json());const employeeId=s.role==='EMPLOYEE'?s.employeeId!:raw.employeeId;const days=Math.max(1,Math.ceil((raw.endDate.getTime()-raw.startDate.getTime())/86400000)+1);const row=await prisma.leaveRequest.create({data:{...raw,employeeId,days}});return NextResponse.json(row,{status:201})}catch(e:any){return NextResponse.json({error:e.message},{status:400})}}
+export async function PATCH(req:Request){try{const s=await requireRole(['ADMIN','HR']);const {id,status}=await req.json();if(!['APPROVED','REJECTED','CANCELLED'].includes(status))return NextResponse.json({error:'Invalid status'},{status:400});const row=await prisma.leaveRequest.update({where:{id},data:{status,reviewedBy:s.id,reviewedAt:new Date()}});return NextResponse.json(row)}catch(e:any){return NextResponse.json({error:e.message},{status:e.message==='FORBIDDEN'?403:400})}}
