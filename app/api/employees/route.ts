@@ -1,0 +1,7 @@
+import { NextResponse } from 'next/server'
+import { getSession, requireRole } from '@/lib/auth'
+import { prisma } from '@/lib/prisma'
+import { z } from 'zod'
+const schema=z.object({name:z.string().min(2),email:z.string().email(),phone:z.string().optional(),designation:z.string().min(2),salary:z.coerce.number().nonnegative(),joinedAt:z.coerce.date(),departmentId:z.string().min(1)})
+export async function GET(req:Request){ const s=await getSession(); if(!s)return NextResponse.json({error:'Unauthorized'},{status:401}); const q=new URL(req.url).searchParams.get('q')||''; const employees=await prisma.employee.findMany({where:{OR:[{name:{contains:q,mode:'insensitive'}},{email:{contains:q,mode:'insensitive'}},{employeeId:{contains:q,mode:'insensitive'}}]},include:{department:true},orderBy:{createdAt:'desc'}}); return NextResponse.json(employees)}
+export async function POST(req:Request){ try{const s=await requireRole(['ADMIN','HR']); const data=schema.parse(await req.json()); const employee=await prisma.employee.create({data:{...data,salary:data.salary,employeeId:`EMP-${Date.now().toString().slice(-6)}`},include:{department:true}}); await prisma.auditLog.create({data:{actorId:s.id,action:'CREATE',entity:'Employee',entityId:employee.id}}); return NextResponse.json(employee,{status:201})}catch(e:any){return NextResponse.json({error:e.message||'Invalid request'},{status:e.message==='FORBIDDEN'?403:400})} }
